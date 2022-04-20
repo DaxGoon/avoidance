@@ -2,20 +2,11 @@
 
 # Enable exit on non 0
 set -e
-
-# This script must be run with super user previleges
-check_root_perms() {
-    if ! [ "$(id -u)" = 0 ]; then
-        printf 'The script needs to be run as root.\n' >&2
-        exit 1
-    fi
-    if [ "$SUDO_USER" ]; then
-        real_user=$SUDO_USER
-    else
-        real_user=$(whoami)
-    fi
-    printf 'Running the program as %s \n' "$real_user"
-}
+set -o xctrace
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o nullglob
 
 pkg_list=(
     xorg-minimal
@@ -59,24 +50,6 @@ pkg_list=(
     polybar
 )
 
-# PROMPT
-printf "This will install the following packages in order to configure the system:\n"
-for pkg in "${pkg_list[@]}"; do
-    printf "%s " "$pkg"
-done
-
-ask_perms() {
-    while true; do
-        read -pr "Continue?" yn
-        case $yn in
-            [Yy]* ) make install; break;;
-            [Nn]* ) exit;;
-            * ) echo "Please answer yes or no.";;
-        esac
-    done
-}
-
-
 install_pkgs() {
     if xbps-query "$1" &> /dev/null; then
 	    tput setaf 2
@@ -93,6 +66,18 @@ install_pkgs() {
 enable_wifi() {
     # first unblock hardware, eg. wifi, if blocked
     rfkill unblock all
+    # Create wifi config
+    read -pr "Enter the Wifi name (ssid) to connect: " ssid
+    read -pr "enter the wifi password: " wifipass
+    touch /etc/wpa_supplicant/wpa_supplicant.conf
+    wpa_passphrase "$ssid" "$wifipass" >> /etc/wpa_supplicant/wpa_supplicant.conf
+    [ ! -f /etc/wpa_supplicant/wpa_supplicant.conf ] && printf '\nnetwork={
+       \n ssid="$ssid"
+       \n key_mgmt=NONE
+       \n wep_key0="$wifipass"
+       \n wep_tx_keyidx=0
+       \n auth_alg=SHARED
+    }' >> /etc/wpa_supplicant/wpa_supplicant.conf
     # enable wifi service
     ln -s /etc/sv/wpa_supplicant /var/service/
     # rerun service if it does not automatically
@@ -124,13 +109,13 @@ regenerate_initramfs() {
 setup_polybar() {
     # create launch script
     mkdir -p "$HOME"/.config/polybar && touch "$HOME"/.config/polybar/launch.sh
-    echo #!/bin/bash > "$HOME"/.config/polybar/launch.sh
-    echo # Terminate already running bar instances >> "$HOME"/.config/polybar/launch.sh
-    echo killall -q polybar >> "$HOME"/.config/polybar/launch.sh
-    echo # If all your bars have ipc enabled, you can also use >> "$HOME"/.config/polybar/launch.sh
-    echo # polybar-msg cmd quit >> "$HOME"/.config/polybar/launch.sh
-    echo # Launch Polybar, using default config location ~/.config/polybar/config.ini >> "$HOME"/.config/polybar/launch.sh
-    echo polybar mybar 2>&1 | tee -a /tmp/polybar.log & disown >> "$HOME"/.config/polybar/launch.sh
+    echo '#!/bin/bash' > "$HOME"/.config/polybar/launch.sh
+    echo '# Terminate already running bar instances' >> "$HOME"/.config/polybar/launch.sh
+    echo 'killall -q polybar' >> "$HOME"/.config/polybar/launch.sh
+    echo '# If all your bars have ipc enabled, you can also use' >> "$HOME"/.config/polybar/launch.sh
+    echo '# polybar-msg cmd quit' >> "$HOME"/.config/polybar/launch.sh
+    echo '# Launch Polybar, using default config location ~/.config/polybar/config.ini' >> "$HOME"/.config/polybar/launch.sh
+    echo 'polybar mybar 2>&1 | tee -a /tmp/polybar.log & disown' >> "$HOME"/.config/polybar/launch.sh
     echo 'echo "Polybar launched..."' >> "$HOME"/.config/polybar/launch.sh
     # Install configuration for the user
     install -Dm644 /usr/share/examples/polybar/config.ini ~/.config/polybar/config.ini
@@ -144,6 +129,16 @@ configure_bspwm() {
     echo "$HOME/.config/polybar/launch.sh" >> "$HOME"/.config/bspwm/bspwmrc
 }
 
+enable_touchpad() {
+    [ ! -f /etc/X11/xorg.conf.d/40-libinput.conf ] && printf '\nSection "InputClass"
+        \nIdentifier "libinput touchpad catchall"
+        \nMatchIsTouchpad "on"
+        \nMatchDevicePath "/dev/input/event*"
+        \nDriver "libinput"
+	    \nOption "Tapping" "on"
+        \nEndSection' > /etc/X11/xorg.conf.d/40-libinput.conf
+}
+
 update_grub() {
     sudo update-grub
 }
@@ -154,17 +149,55 @@ remove_orphaned_pkgs() {
 
 
 main() {
-    ask_perms
-    check_root_perms
+    # Check su perms
+    if ! [ "$(id -u)" = 0 ]; then
+        printf 'The script needs to be run as root.\n' >&2
+        exit 1
+    fi
+    if [ "$SUDO_USER" ]; then
+        real_user=$SUDO_USER
+    else
+        real_user=$(whoami)
+    fi
+    printf 'Running the program as %s \n' "$real_user"
+
+    # Give info
+    printf "This will install the following packages in order to configure the system:\n"
+    for pkg in "${pkg_list[@]}"; do
+        printf "%s " "$pkg"
+    done
+    # Prompt for confirmation
+    while true; do
+        read -pr "Continue?" yn
+        case $yn in
+            [Yy]* ) break;;
+            [Nn]* ) exit;;
+            * ) echo "Please answer yes or no.";;
+        esac
+    done
+
+    # Execute main tasks
+    printf "Enabling wifi [1/10]\n"
     enable_wifi
+    printf "Enabling non-free repository [2/10]\n"
     enable_non_free
+    printf "Installing required packages [3/10]\n"
     install_pkgs pkg_list
+    printf "Enabling and starting basic services [4/10]\n"
     start_basic_services
+    printf "Regenerating initramfs [5/10]\n"
     regenerate_initramfs
+    printf "Setting up Polybar [6/10]\n"
     setup_polybar
+    printf "Enabling Configuring BSPWM window manager [7/10]\n"
     configure_bspwm
+    printf "Enabling touchpad [8/10]\n"
+    enable_touchpad
+    printf "Updating grub [9/10]\n"
     update_grub
+    printf "Removing orphaned packages [10/10]\n"
     remove_orphaned_pkgs
+    printf "Congratulations! All Done 👌\n✨✨✨"
 }
 
 main
