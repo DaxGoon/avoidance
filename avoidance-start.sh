@@ -71,13 +71,7 @@ enable_wifi() {
     read -pr "enter the wifi password: " wifipass
     touch /etc/wpa_supplicant/wpa_supplicant.conf
     wpa_passphrase "$ssid" "$wifipass" >> /etc/wpa_supplicant/wpa_supplicant.conf
-    [ ! -f /etc/wpa_supplicant/wpa_supplicant.conf ] && printf '\nnetwork={
-       \n ssid="$ssid"
-       \n key_mgmt=NONE
-       \n wep_key0="$wifipass"
-       \n wep_tx_keyidx=0
-       \n auth_alg=SHARED
-    }' >> /etc/wpa_supplicant/wpa_supplicant.conf
+    printf "\nnetwork={\n ssid=%s\n key_mgmt=NONE\n wep_key0=%s\n wep_tx_keyidx=0\n auth_alg=SHARED }" "$ssid" "$wifipass">> /etc/wpa_supplicant/wpa_supplicant.conf
     # enable wifi service
     ln -s /etc/sv/wpa_supplicant /var/service/
     # rerun service if it does not automatically
@@ -109,14 +103,7 @@ regenerate_initramfs() {
 setup_polybar() {
     # create launch script
     mkdir -p "$HOME"/.config/polybar && touch "$HOME"/.config/polybar/launch.sh
-    echo '#!/bin/bash' > "$HOME"/.config/polybar/launch.sh
-    echo '# Terminate already running bar instances' >> "$HOME"/.config/polybar/launch.sh
-    echo 'killall -q polybar' >> "$HOME"/.config/polybar/launch.sh
-    echo '# If all your bars have ipc enabled, you can also use' >> "$HOME"/.config/polybar/launch.sh
-    echo '# polybar-msg cmd quit' >> "$HOME"/.config/polybar/launch.sh
-    echo '# Launch Polybar, using default config location ~/.config/polybar/config.ini' >> "$HOME"/.config/polybar/launch.sh
-    echo 'polybar mybar 2>&1 | tee -a /tmp/polybar.log & disown' >> "$HOME"/.config/polybar/launch.sh
-    echo 'echo "Polybar launched..."' >> "$HOME"/.config/polybar/launch.sh
+    printf "\n#!/bin/bash \n# Terminate already running bar instances \nkillall -q polybar \n# If all your bars have ipc enabled, you can also use \n# polybar-msg cmd quit \n# Launch Polybar, using default config location ~/.config/polybar/config.ini \npolybar mybar 2>&1 | tee -a /tmp/polybar.log & disown" >> "$HOME"/.config/polybar/launch.sh
     # Install configuration for the user
     install -Dm644 /usr/share/examples/polybar/config.ini ~/.config/polybar/config.ini
 }
