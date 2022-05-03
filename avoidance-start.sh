@@ -19,19 +19,19 @@ source resolve_wifi.sh
 pkg_file="pkgs.txt"
 
 main() {
-    # Check su perms
-	[ ! "$EUID" -eq 0 ] && echo 'The script needs to be run with superuser previleges or by root user.' >&2 && exit 1
+    # Check if root user
+	[ ! "$EUID" -eq 0 ] && echo 'The script needs to be run by the root user.' >&2 && exit 1
 
     # Check hw & update pkg list
     resolve_hw
-    case $arch in
+    case "$arch" in
 		"Intel") printf "intel-ucode\nlinux-firmware-intel\nintel-video-accel" >> pkg_file ;;
 		"AMD") printf "linux-firmware-amd\nmesa-dri\nxf86-video-amdgpu\mesa-vaapi\mesa-vdpau" >> pkg_file ;;
 	esac
 
     # Check Desktop choice & update pkg list
     resolve_desktop
-	case $de in
+	case "$de" in
 		"Kde Plasma") printf "kde5\nkde5-baseapps" >> pkg_file ;;
         "Gnome") printf "gnome\ngnome-apps\ngdm" >> pkg_file ;;
         "BSPWM") printf "bspwm\nsxhkd\npolybar\ndmenu\npicom\nnitrogen" >> pkg_file ;;
@@ -39,7 +39,7 @@ main() {
 
     # Check editor choice and update the package list
     resolve_editor
-	case $editor in
+	case "$editor" in
 		"emacs")  printf "emacs" >> pkg_file ;;
 		"vim")  printf "vim" >> pkg_file ;;
 		"neovim")  printf "neovim" >> pkg_file ;;
@@ -58,7 +58,7 @@ main() {
     mkdir -p /etc/wpa_supåplicant
     touch /etc/wpa_supplicant/wpa_supplicant.conf
 
-	case $sec in
+	case "$sec" in
 		WPA) wpa_passphrase "$ssid" "$wifipass" >> /etc/wpa_supplicant/wpa_supplicant.conf ;;
 		WEP)  printf "\nnetwork={\n ssid=%s\n key_mgmt=NONE\n wep_key0=%s\n wep_tx_keyidx=0\n auth_alg=SHARED }" "$ssid" "$wifipass" >> /etc/wpa_supplicant/wpa_supplicant.conf ;;
 	esac
