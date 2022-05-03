@@ -20,58 +20,33 @@ pkg_file="pkgs.txt"
 
 main() {
     # Check su perms
-    if ! [ "$(id -u)" = 0 ]; then
-        printf 'The script needs to be run as root.\n' >&2
-        exit 1
-    fi
-    if [ "$SUDO_USER" ]; then
-        real_user=$SUDO_USER
-    else
-        real_user=$(whoami)
-    fi
-    printf 'Running the program as %s \n' "$real_user"
+	[ ! "$EUID" -eq 0 ] && echo 'The script needs to be run with superuser previleges or by root user.' >&2 && exit 1
 
     # Check hw & update pkg list
     resolve_hw
-    if [ "$arch" = "Intel" ]; then
-        printf "intel-ucode\nlinux-firmware-intel\nintel-video-accel" >> pkg_file
-    fi
-    if [ "$arch" = "AMD" ]; then
-        printf "linux-firmware-amd\nmesa-dri\nxf86-video-amdgpu\mesa-vaapi\mesa-vdpau" >> pkg_file
-    fi
+    case $arch in
+		"Intel") printf "intel-ucode\nlinux-firmware-intel\nintel-video-accel" >> pkg_file ;;
+		"AMD") printf "linux-firmware-amd\nmesa-dri\nxf86-video-amdgpu\mesa-vaapi\mesa-vdpau" >> pkg_file ;;
+	esac
 
     # Check Desktop choice & update pkg list
     resolve_desktop
-    if [ "$de" = "KDE Plasma" ]; then
-        printf "kde5\nkde5-baseapps" >> pkg_file
-    fi
-    if [ "$de" = "Gnome"  ]; then
-        printf "gnome\ngnome-apps\ngdm" >> pkg_file
-    fi
-    if [ "$de" = "BSPWM"  ]; then
-        printf "bspwm\nsxhkd\npolybar\ndmenu\npicom\nnitrogen" >> pkg_file
-    fi
+	case $de in
+		"Kde Plasma") printf "kde5\nkde5-baseapps" >> pkg_file ;;
+        "Gnome") printf "gnome\ngnome-apps\ngdm" >> pkg_file ;;
+        "BSPWM") printf "bspwm\nsxhkd\npolybar\ndmenu\npicom\nnitrogen" >> pkg_file ;;
+	esac
 
     # Check editor choice and update the package list
     resolve_editor
-    if [ "$editor" = "emacs" ]; then
-        printf "emacs" >> pkg_file
-    fi
-    if [ "$editor" = "nano"  ]; then
-        printf "nano" >> pkg_file
-    fi
-    if [ "$editor" = "vim"  ]; then
-        printf "vim" >> pkg_file
-    fi
-    if [ "$editor" = "GEdit" ]; then
-        printf "gedit" >> pkg_file
-    fi
-    if [ "$editor" = "Kate"  ]; then
-        printf "kate5" >> pkg_file
-    fi
-    if [ "$editor" = "VS Code"  ]; then
-        printf "vscode" >> pkg_file
-    fi
+	case $editor in
+		"emacs")  printf "emacs" >> pkg_file ;;
+		"vim")  printf "vim" >> pkg_file ;;
+		"neovim")  printf "neovim" >> pkg_file ;;
+		"Gedit")  printf "gedit" >> pkg_file ;;
+		"Kate")  printf "kate5" >> pkg_file ;;
+		"VS Code")  printf "vscode" >> pkg_file ;;
+    esac
 
     # enable and setup wifi
     resolve_wifi
@@ -83,12 +58,11 @@ main() {
     mkdir -p /etc/wpa_supåplicant
     touch /etc/wpa_supplicant/wpa_supplicant.conf
 
-    if [ "$sec" = "WPA" ]; then
-        wpa_passphrase "$ssid" "$wifipass" >> /etc/wpa_supplicant/wpa_supplicant.conf
-    fi
-    if [ "$sec" = "WEP" ]; then
-        printf "\nnetwork={\n ssid=%s\n key_mgmt=NONE\n wep_key0=%s\n wep_tx_keyidx=0\n auth_alg=SHARED }" "$ssid" "$wifipass">> /etc/wpa_supplicant/wpa_supplicant.conf
-    fi
+	case $sec in
+		WPA) wpa_passphrase "$ssid" "$wifipass" >> /etc/wpa_supplicant/wpa_supplicant.conf ;;
+		WEP)  printf "\nnetwork={\n ssid=%s\n key_mgmt=NONE\n wep_key0=%s\n wep_tx_keyidx=0\n auth_alg=SHARED }" "$ssid" "$wifipass" >> /etc/wpa_supplicant/wpa_supplicant.conf ;;
+	esac
+
     # enable wifi service
     ln -s /etc/sv/wpa_supplicant /var/service/
     # rerun service if it does not automatically
@@ -102,8 +76,8 @@ main() {
     cd void-packages
     ./xbps-src binary-bootstrap
     ./xbps-src bootstrap-update
-    sudo xbps-install -yv void-repo-nonfree
-    sudo xbps-install -Suv
+    xbps-install -yv void-repo-nonfree
+    xbps-install -Suv
 
     # Give pkg installation info before installing packages
     printf "This will install the following packages in order to configure the system:\n"
@@ -131,7 +105,7 @@ main() {
     	    tput setaf 3
     	    printf 'Installing package: %s \n' "$1"
     	    tput sgr0
-    	    sudo xbps-install -vy "$line"
+    	    xbps-install -vy "$line"
         fi
     done <"$pkg_file"
 
@@ -142,10 +116,10 @@ main() {
     xbps-reconfigure --force -a
 
     # update grub
-    sudo update-grub
+    update-grub
 
     # remove orphan packages
-    sudo xbps-remove -Ooyv
+    xbps-remove -Ooyv
 
     # If the desktop / wm is BSPWM
     if [ "$de" = "BSPWM" ]; then
